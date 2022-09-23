@@ -1,14 +1,17 @@
 {
-  "name": "@uniswap/v2-sdk",
+  "name": "@p00ls/uniswap-v2-sdk",
   "license": "MIT",
-  "version": "3.0.0",
+  "version": "3.0.1",
   "description": "🛠 An SDK for building applications on top of Uniswap V2",
   "main": "dist/index.js",
   "typings": "dist/index.d.ts",
   "files": [
     "dist"
   ],
-  "repository": "https://github.com/Uniswap/uniswap-v2-sdk.git",
+  "publishConfig": {
+    "registry": "https://npm.pkg.github.com"
+  },
+  "repository": "https://github.com/p00ls/uniswap-v2-sdk.git",
   "keywords": [
     "uniswap",
     "ethereum"
