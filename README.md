@@ -3,5 +3,5 @@
 ```
 yarn build
 cd dist/
-yarn publish dist
+yarn publish
 ```
