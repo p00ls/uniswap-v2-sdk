@@ -4,15 +4,26 @@ import JSBI from 'jsbi'
 import { pack, keccak256 } from '@ethersproject/solidity'
 import { getCreate2Address } from '@ethersproject/address'
 
-import { FACTORY_ADDRESS, INIT_CODE_HASH, MINIMUM_LIQUIDITY, FIVE, _997, _1000, ONE, ZERO } from '../constants'
+import { MINIMUM_LIQUIDITY, FIVE, _997, _1000, ONE, ZERO } from '../constants'
 import { InsufficientReservesError, InsufficientInputAmountError } from '../errors'
+
+function getInitCodeHash(implementation: string): string {
+  const byteCode = [
+    '0x3d602d80600a3d3981f3363d3d373d3d3d363d73',
+    implementation.replace(/0x/, '').toLowerCase(),
+    '5af43d82803e903d91602b57fd5bf3'
+  ].join('')
+  return keccak256(['bytes'], [byteCode])
+}
 
 export const computePairAddress = ({
   factoryAddress,
+  templateAddress,
   tokenA,
   tokenB
 }: {
   factoryAddress: string
+  templateAddress: string
   tokenA: Token
   tokenB: Token
 }): string => {
@@ -20,24 +31,46 @@ export const computePairAddress = ({
   return getCreate2Address(
     factoryAddress,
     keccak256(['bytes'], [pack(['address', 'address'], [token0.address, token1.address])]),
-    INIT_CODE_HASH
+    getInitCodeHash(templateAddress)
   )
 }
+
+type AddressMap = { [chainId: number]: string }
+
 export class Pair {
   public readonly liquidityToken: Token
   private readonly tokenAmounts: [CurrencyAmount<Token>, CurrencyAmount<Token>]
+  private readonly factoryAddresses: AddressMap
+  private readonly factoryTemplateAddresses: AddressMap
 
-  public static getAddress(tokenA: Token, tokenB: Token): string {
-    return computePairAddress({ factoryAddress: FACTORY_ADDRESS, tokenA, tokenB })
+  public static getAddress(
+    tokenA: Token,
+    tokenB: Token,
+    factoryAddresses: AddressMap,
+    factoryTemplateAddresses: AddressMap
+  ): string {
+    return computePairAddress({
+      factoryAddress: factoryAddresses[tokenA.chainId],
+      templateAddress: factoryTemplateAddresses[tokenA.chainId],
+      tokenA,
+      tokenB
+    })
   }
 
-  public constructor(currencyAmountA: CurrencyAmount<Token>, tokenAmountB: CurrencyAmount<Token>) {
+  public constructor(
+    currencyAmountA: CurrencyAmount<Token>,
+    tokenAmountB: CurrencyAmount<Token>,
+    factoryAddresses: AddressMap,
+    factoryTemplateAddresses: AddressMap
+  ) {
+    this.factoryAddresses = factoryAddresses
+    this.factoryTemplateAddresses = factoryTemplateAddresses
     const tokenAmounts = currencyAmountA.currency.sortsBefore(tokenAmountB.currency) // does safety checks
       ? [currencyAmountA, tokenAmountB]
       : [tokenAmountB, currencyAmountA]
     this.liquidityToken = new Token(
       tokenAmounts[0].currency.chainId,
-      Pair.getAddress(tokenAmounts[0].currency, tokenAmounts[1].currency),
+      Pair.getAddress(tokenAmounts[0].currency, tokenAmounts[1].currency, factoryAddresses, factoryTemplateAddresses),
       18,
       'UNI-V2',
       'Uniswap V2'
@@ -123,7 +156,15 @@ export class Pair {
     if (JSBI.equal(outputAmount.quotient, ZERO)) {
       throw new InsufficientInputAmountError()
     }
-    return [outputAmount, new Pair(inputReserve.add(inputAmount), outputReserve.subtract(outputAmount))]
+    return [
+      outputAmount,
+      new Pair(
+        inputReserve.add(inputAmount),
+        outputReserve.subtract(outputAmount),
+        this.factoryAddresses,
+        this.factoryTemplateAddresses
+      )
+    ]
   }
 
   public getInputAmount(outputAmount: CurrencyAmount<Token>): [CurrencyAmount<Token>, Pair] {
@@ -144,7 +185,15 @@ export class Pair {
       outputAmount.currency.equals(this.token0) ? this.token1 : this.token0,
       JSBI.add(JSBI.divide(numerator, denominator), ONE)
     )
-    return [inputAmount, new Pair(inputReserve.add(inputAmount), outputReserve.subtract(outputAmount))]
+    return [
+      inputAmount,
+      new Pair(
+        inputReserve.add(inputAmount),
+        outputReserve.subtract(outputAmount),
+        this.factoryAddresses,
+        this.factoryTemplateAddresses
+      )
+    ]
   }
 
   public getLiquidityMinted(
