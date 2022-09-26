@@ -14,6 +14,7 @@ import invariant from 'tiny-invariant'
 
 import { Pair } from './pair'
 import { Route } from './route'
+import JSBI from 'jsbi'
 
 // minimal interface so the input output comparator may be shared across types
 interface InputOutput<TInput extends Currency, TOutput extends Currency> {
@@ -112,30 +113,35 @@ export class Trade<TInput extends Currency, TOutput extends Currency, TTradeType
    * Constructs an exact in trade with the given amount in and route
    * @param route route of the exact in trade
    * @param amountIn the amount being passed in
+   * @param feeQuotient the fee quotient for the trade (uniswap default is 3)
    */
   public static exactIn<TInput extends Currency, TOutput extends Currency>(
     route: Route<TInput, TOutput>,
-    amountIn: CurrencyAmount<TInput>
+    amountIn: CurrencyAmount<TInput>,
+    feeQuotient: JSBI
   ): Trade<TInput, TOutput, TradeType.EXACT_INPUT> {
-    return new Trade(route, amountIn, TradeType.EXACT_INPUT)
+    return new Trade(route, amountIn, TradeType.EXACT_INPUT, feeQuotient)
   }
 
   /**
    * Constructs an exact out trade with the given amount out and route
    * @param route route of the exact out trade
    * @param amountOut the amount returned by the trade
+   * @param feeQuotient the fee quotient for the trade (uniswap default is 3)
    */
   public static exactOut<TInput extends Currency, TOutput extends Currency>(
     route: Route<TInput, TOutput>,
-    amountOut: CurrencyAmount<TOutput>
+    amountOut: CurrencyAmount<TOutput>,
+    feeQuotient: JSBI
   ): Trade<TInput, TOutput, TradeType.EXACT_OUTPUT> {
-    return new Trade(route, amountOut, TradeType.EXACT_OUTPUT)
+    return new Trade(route, amountOut, TradeType.EXACT_OUTPUT, feeQuotient)
   }
 
   public constructor(
     route: Route<TInput, TOutput>,
     amount: TTradeType extends TradeType.EXACT_INPUT ? CurrencyAmount<TInput> : CurrencyAmount<TOutput>,
-    tradeType: TTradeType
+    tradeType: TTradeType,
+    feeQuotient: JSBI
   ) {
     this.route = route
     this.tradeType = tradeType
@@ -146,7 +152,7 @@ export class Trade<TInput extends Currency, TOutput extends Currency, TTradeType
       tokenAmounts[0] = amount.wrapped
       for (let i = 0; i < route.path.length - 1; i++) {
         const pair = route.pairs[i]
-        const [outputAmount] = pair.getOutputAmount(tokenAmounts[i])
+        const [outputAmount] = pair.getOutputAmount(tokenAmounts[i], feeQuotient)
         tokenAmounts[i + 1] = outputAmount
       }
       this.inputAmount = CurrencyAmount.fromFractionalAmount(route.input, amount.numerator, amount.denominator)
@@ -160,7 +166,7 @@ export class Trade<TInput extends Currency, TOutput extends Currency, TTradeType
       tokenAmounts[tokenAmounts.length - 1] = amount.wrapped
       for (let i = route.path.length - 1; i > 0; i--) {
         const pair = route.pairs[i - 1]
-        const [inputAmount] = pair.getInputAmount(tokenAmounts[i])
+        const [inputAmount] = pair.getInputAmount(tokenAmounts[i], feeQuotient)
         tokenAmounts[i - 1] = inputAmount
       }
       this.inputAmount = CurrencyAmount.fromFractionalAmount(
@@ -224,11 +230,13 @@ export class Trade<TInput extends Currency, TOutput extends Currency, TTradeType
    * @param currentPairs used in recursion; the current list of pairs
    * @param currencyAmountIn used in recursion; the original value of the currencyAmountIn parameter
    * @param bestTrades used in recursion; the current list of best trades
+   * @param feeQuotient the fee quotient for the trade (uniswap default is 3)
    */
   public static bestTradeExactIn<TInput extends Currency, TOutput extends Currency>(
     pairs: Pair[],
     currencyAmountIn: CurrencyAmount<TInput>,
     currencyOut: TOutput,
+    feeQuotient: JSBI,
     { maxNumResults = 3, maxHops = 3 }: BestTradeOptions = {},
     // used in recursion.
     currentPairs: Pair[] = [],
@@ -249,7 +257,7 @@ export class Trade<TInput extends Currency, TOutput extends Currency, TTradeType
 
       let amountOut: CurrencyAmount<Token>
       try {
-        ;[amountOut] = pair.getOutputAmount(amountIn)
+        ;[amountOut] = pair.getOutputAmount(amountIn, feeQuotient)
       } catch (error) {
         // input too low
         if (error.isInsufficientInputAmountError) {
@@ -264,7 +272,8 @@ export class Trade<TInput extends Currency, TOutput extends Currency, TTradeType
           new Trade(
             new Route([...currentPairs, pair], currencyAmountIn.currency, currencyOut),
             currencyAmountIn,
-            TradeType.EXACT_INPUT
+            TradeType.EXACT_INPUT,
+            feeQuotient
           ),
           maxNumResults,
           tradeComparator
@@ -277,6 +286,7 @@ export class Trade<TInput extends Currency, TOutput extends Currency, TTradeType
           pairsExcludingThisPair,
           currencyAmountIn,
           currencyOut,
+          feeQuotient,
           {
             maxNumResults,
             maxHops: maxHops - 1
@@ -318,11 +328,13 @@ export class Trade<TInput extends Currency, TOutput extends Currency, TTradeType
    * @param currentPairs used in recursion; the current list of pairs
    * @param currencyAmountOut used in recursion; the original value of the currencyAmountOut parameter
    * @param bestTrades used in recursion; the current list of best trades
+   * @param feeQuotient the fee quotient for the trade (uniswap default is 3)
    */
   public static bestTradeExactOut<TInput extends Currency, TOutput extends Currency>(
     pairs: Pair[],
     currencyIn: TInput,
     currencyAmountOut: CurrencyAmount<TOutput>,
+    feeQuotient: JSBI,
     { maxNumResults = 3, maxHops = 3 }: BestTradeOptions = {},
     // used in recursion.
     currentPairs: Pair[] = [],
@@ -343,7 +355,7 @@ export class Trade<TInput extends Currency, TOutput extends Currency, TTradeType
 
       let amountIn: CurrencyAmount<Token>
       try {
-        ;[amountIn] = pair.getInputAmount(amountOut)
+        ;[amountIn] = pair.getInputAmount(amountOut, feeQuotient)
       } catch (error) {
         // not enough liquidity in this pair
         if (error.isInsufficientReservesError) {
@@ -358,7 +370,8 @@ export class Trade<TInput extends Currency, TOutput extends Currency, TTradeType
           new Trade(
             new Route([pair, ...currentPairs], currencyIn, currencyAmountOut.currency),
             currencyAmountOut,
-            TradeType.EXACT_OUTPUT
+            TradeType.EXACT_OUTPUT,
+            feeQuotient
           ),
           maxNumResults,
           tradeComparator
@@ -371,6 +384,7 @@ export class Trade<TInput extends Currency, TOutput extends Currency, TTradeType
           pairsExcludingThisPair,
           currencyIn,
           currencyAmountOut,
+          feeQuotient,
           {
             maxNumResults,
             maxHops: maxHops - 1

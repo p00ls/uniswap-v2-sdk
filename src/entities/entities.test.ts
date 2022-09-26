@@ -99,7 +99,7 @@ describe('entities', () => {
           )
           const inputAmount = CurrencyAmount.fromRawAmount(tokens[1], decimalize(1, tokens[1].decimals))
           const expectedOutputAmount = CurrencyAmount.fromRawAmount(WETH9, '1662497915624478906')
-          const trade = new Trade(route, inputAmount, TradeType.EXACT_INPUT)
+          const trade = new Trade(route, inputAmount, TradeType.EXACT_INPUT, JSBI.BigInt(3))
           expect(trade.route).toEqual(route)
           expect(trade.tradeType).toEqual(TradeType.EXACT_INPUT)
           expect(trade.inputAmount).toEqual(inputAmount)
@@ -116,7 +116,7 @@ describe('entities', () => {
         it('TradeType.EXACT_OUTPUT', () => {
           const outputAmount = CurrencyAmount.fromRawAmount(WETH9, '1662497915624478906')
           const expectedInputAmount = CurrencyAmount.fromRawAmount(tokens[1], decimalize(1, tokens[1].decimals))
-          const trade = new Trade(route, outputAmount, TradeType.EXACT_OUTPUT)
+          const trade = new Trade(route, outputAmount, TradeType.EXACT_OUTPUT, JSBI.BigInt(3))
           expect(trade.route).toEqual(route)
           expect(trade.tradeType).toEqual(TradeType.EXACT_OUTPUT)
           expect(trade.outputAmount).toEqual(outputAmount)
@@ -151,7 +151,7 @@ describe('entities', () => {
               WETH9
             )
             const outputAmount = CurrencyAmount.fromRawAmount(tokens[1], '1')
-            const trade = new Trade(route, outputAmount, TradeType.EXACT_INPUT)
+            const trade = new Trade(route, outputAmount, TradeType.EXACT_INPUT, JSBI.BigInt(3))
 
             expect(trade.priceImpact.toSignificant(18)).toEqual(
               tokens[1].decimals === 9 ? '0.300000099400899902' : '0.3000000000000001'
