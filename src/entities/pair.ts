@@ -61,7 +61,9 @@ export class Pair {
     currencyAmountA: CurrencyAmount<Token>,
     tokenAmountB: CurrencyAmount<Token>,
     factoryAddresses: AddressMap,
-    factoryTemplateAddresses: AddressMap
+    factoryTemplateAddresses: AddressMap,
+    liquidityTokenSymbol: string = 'POOLS-LP',
+    liquidityTokenName: string = 'POOLS LP'
   ) {
     this.factoryAddresses = factoryAddresses
     this.factoryTemplateAddresses = factoryTemplateAddresses
@@ -72,8 +74,8 @@ export class Pair {
       tokenAmounts[0].currency.chainId,
       Pair.getAddress(tokenAmounts[0].currency, tokenAmounts[1].currency, factoryAddresses, factoryTemplateAddresses),
       18,
-      'UNI-V2',
-      'Uniswap V2'
+      liquidityTokenSymbol,
+      liquidityTokenName
     )
     this.tokenAmounts = tokenAmounts as [CurrencyAmount<Token>, CurrencyAmount<Token>]
   }
